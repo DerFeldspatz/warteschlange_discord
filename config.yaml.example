@@ -1,4 +1,4 @@
-api_key: 'TESTKEY'
+token: 'TESTKEY'
 
 roles:
     student:  ['Studierende']
