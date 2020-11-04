@@ -67,7 +67,7 @@ def check_permission(user, roles):
 
 # Lade Config
 with open('config.yaml') as f:
-    config = yaml.load(f, Loader=yaml.BaseLoader)
+    config = yaml.load(f, Loader=yaml.SafeLoader)
 
 token   = config.get('token')
 roles   = config.get('roles')
