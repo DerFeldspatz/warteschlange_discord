@@ -83,9 +83,6 @@ if not token:
 if not roles:
     raise RuntimeError("Config must contain roles")
 
-# Bot starten
-bot.run(token)
-
 
 # Administrative Befehle
 
@@ -214,3 +211,6 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
                 await ctx.send(f"Hallo {get_displaynick(author)} du hast die Warteschlange verlassen.")
             else:
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell nicht in der Warteschlange. Du kannst dich mit $wait anstellen")
+
+# Bot starten
+bot.run(token)
