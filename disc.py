@@ -59,7 +59,7 @@ def check_permission(user, roles):
     Returns:
         bool
     '''
-    if {[role.name for role in user.message]} & {roles}:
+    if {[role.name for role in user.message.author.roles]} & {roles}:
         return True
     else:
         return False
@@ -70,8 +70,8 @@ with open('config.yaml') as f:
     config = yaml.load(f, Loader=yaml.SafeLoader)
 
 token   = config.get('token')
-roles   = config.get('roles')
 prefix  = config.get('prefix')
+roles   = config.get('roles')
 
 # Initialisierung
 bot = commands.Bot(command_prefix=prefix)
@@ -90,7 +90,7 @@ if not roles:
 @bot.command(pass_context=True, help="Öffnet die Warteschlange")
 async def start(ctx):
     # Teste die Rechte
-    if check_permission(ctx, roles.tutor):
+    if check_permission(ctx, roles['tutor']):
         # Setze Status des Bots auf aktiv
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="ob Studis warten"))
         # Feedback an Tutor
@@ -101,7 +101,7 @@ async def start(ctx):
 # Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
-    if check_permission(ctx, roles.tutor):
+    if check_permission(ctx, roles['tutor']):
         # Feedback an Tutor
         await ctx.send("Warteschlange ist nun geschlossen.")
         # Inaktiven Status wenn auf keinem Server aktiv
@@ -122,7 +122,7 @@ async def next(ctx):
     if guild not in enabled:
         enabled[guild] = False
 
-    if check_permission(ctx, roles.tutor):
+    if check_permission(ctx, roles['tutor']):
         if not enabled[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
@@ -146,7 +146,7 @@ async def ls(ctx):
     guild = ctx.message.guild.id
     if guild not in enabled:
         enabled[guild] = False
-    if check_permission(ctx, roles.tutor):
+    if check_permission(ctx, roles['tutor']):
         if not enabled[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
