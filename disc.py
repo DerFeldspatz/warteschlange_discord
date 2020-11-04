@@ -43,12 +43,30 @@ if not token:
 if not roles:
     raise RuntimeError("Config must contain roles")
 
-# Speichert Mitglieder der 
+# Speichert Mitglieder der Warteschlange 
 member_queues = {}
 # Speichert ID's der Server und den Aktivitaetszustand
-enabled = {}
+enabledGuilds = {}
 
 # Definiere gebrauchte Funktionen
+async def updateGuilds(queueEnabled=False):
+    '''Aktualisiert enabledGuilds (dict) um die fehlenden neuen Server, denen der Bot beigetreten ist. 
+    Standardmaessig ist die Warteschlange aus.
+    ACHTUNG: Langsam, wenn Bot auf vielen Servern aktiv!
+
+    Args:
+        queueEnabled (bool):    Warteschlange ist auf den neuen Servern aktiv (optional)
+    
+    Returns:
+        pass
+    '''
+    allGuilds = {}
+    async for guild in bot.fetch_guilds(limit=100):
+        await print(guild.name, guild.id)
+        allGuilds[guild.id] = queueEnabled
+    enabledGuilds.update(allGuilds)
+    pass
+
 def get_displaynick(author):
     '''Funktion gibt Anzeigenamen auf dem aktuellen Server zurueck.
 
@@ -83,36 +101,40 @@ def checkRoles(userMessage, accessRoles):
         return False
 
 
+
 # Administrative Befehle
 
 # Startet die Warteschlange auf dem aktuellen Server für alle Nutzer in beliebiegen Kanälen. Aktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Öffnet die Warteschlange")
 async def start(ctx):
-    print(__name__, 'issued')
     # Teste die Rechte
     if checkRoles(ctx.message, roles['tutor']):
+        # Aktualisiere Liste mit aktivierten Servern
+        updateGuilds()
         # Setze Status des Bots auf aktiv
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="ob Studis warten"))
         # Feedback an Tutor
         await ctx.send("Warteschlange ist nun geöffnet.")
         # Server wird als aktiv gelistet
-        enabled[ctx.message.guild.id] = True
+        enabledGuilds[ctx.message.guild.id] = True
 
 # Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
     if checkRoles(ctx.message, roles['tutor']):
-        # Inaktiven Status wenn auf keinem Server aktiv
-        if not enabled:
-            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
+        # Aktualisiere Liste mit aktivierten Servern
+        updateGuilds()
         # Server wird als inaktiv gelistet
-        enabled[ctx.message.guild.id] = False
+        enabledGuilds[ctx.message.guild.id] = False
         # Feedback an Tutor
         try:
-            member_queues.pop(ctx.message.guild.id, default=False)
+            member_queues.pop(ctx.message.guild.id)
             await ctx.send("Warteschlange ist nun geschlossen.")
         except KeyError:
             await ctx.send('Die Warteschlange ist noch nicht geöffnet worden.')
+        # Inaktiven Status wenn auf keinem Server aktiv
+        if not enabledGuilds:
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
 
 # Schiebt den Nächsten aus der Warteschlange in den Raum des Ausführenden. Beide müssen mit dem Voicechat verbunden sein.
 @bot.command(pass_context=True)
@@ -122,11 +144,11 @@ async def next(ctx):
     voice_state = author.voice
     vc = voice_state.channel
 
-    if guild not in enabled:
-        enabled[guild] = False
+    if guild not in enabledGuilds:
+        enabledGuilds[guild] = False
 
     if checkRoles(ctx.message, roles['tutor']):
-        if not enabled[guild]:
+        if not enabledGuilds[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
             if len(member_queues[guild]) >= 1:
@@ -147,10 +169,10 @@ async def next(ctx):
 async def ls(ctx):
     author = ctx.message.author
     guild = ctx.message.guild.id
-    if guild not in enabled:
-        enabled[guild] = False
+    if guild not in enabledGuilds:
+        enabledGuilds[guild] = False
     if checkRoles(ctx.message, roles['tutor']):
-        if not enabled[guild]:
+        if not enabledGuilds[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
             if member_queues[guild]:
@@ -166,23 +188,23 @@ async def ls(ctx):
 @bot.command(pass_context=True, help="Aktueller Status der Warteschlange")
 async def status(ctx):
     # todo this can fail
-    if ctx.message.guild.id in enabled:
-        if enabled[ctx.message.guild.id]:
+    if ctx.message.guild.id in enabledGuilds:
+        if enabledGuilds[ctx.message.guild.id]:
             await ctx.send("Warteschlange ist offen")
         else:
             await ctx.send("Warteschlange ist geschlossen")
     else:
-        enabled[ctx.message.guild.id] = False
+        enabledGuilds[ctx.message.guild.id] = False
 
 # Nutzer trägt sich in die Warteschlange ein. 
 @bot.command(pass_context=True, help="Anstellen in Warteschlange")
 async def wait(ctx):
     author = ctx.message.author
     guild = ctx.message.guild.id
-    if guild not in enabled:
-        enabled[guild] = False
+    if guild not in enabledGuilds:
+        enabledGuilds[guild] = False
 
-    if not enabled[guild]:
+    if not enabledGuilds[guild]:
         await ctx.send(f"Hallo {get_displaynick(author)} die Warteschlange ist aktuell geschlossen.")
     else:
         if guild not in member_queues:
@@ -201,9 +223,9 @@ async def wait(ctx):
 async def leave(ctx, help="Verlassen der Warteschlange"):
     author = ctx.message.author
     guild = ctx.message.guild.id
-    if guild not in enabled:
-        enabled[guild] = False
-    if not enabled[guild]:
+    if guild not in enabledGuilds:
+        enabledGuilds[guild] = False
+    if not enabledGuilds[guild]:
         await ctx.send(f"Hallo {get_displaynick(author)} die Warteschlange ist aktuell geschlossen. Bei Fragen kannst du unseren 24/7 Chatbot befragen.")
     else:
         if guild not in member_queues:
