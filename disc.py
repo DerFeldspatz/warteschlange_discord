@@ -200,7 +200,7 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
 
 # Lade Config
 with open('config.yaml') as f:
-    config = yaml.load(f)
+    config = yaml.load(f, Loader=BaseLoader)
 
 token   = config.get('token')
 roles   = config.get('roles')
