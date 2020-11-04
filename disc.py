@@ -30,6 +30,7 @@ member_queues = {}
 # Speichert ID's der Server und den Aktivitaetszustand
 enabled = {}
 
+# Definiere gebrauchte Funktionen
 def get_displaynick(author):
     '''Funktion gibt Anzeigenamen auf dem aktuellen Server zurueck.
 
@@ -63,9 +64,27 @@ def check_permission(user, roles):
     else:
         return False
 
+
+# Lade Config
+with open('config.yaml') as f:
+    config = yaml.load(f, Loader=yaml.BaseLoader)
+
+token   = config.get('token')
+roles   = config.get('roles')
+prefix  = config.get('prefix')
+
 # Initialisierung
-bot = commands.Bot(command_prefix="$")
+bot = commands.Bot(command_prefix=prefix)
 bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
+
+# Kontrolliere, ob API-Key und Rollen vorhanden 
+if not token:
+    raise RuntimeError("Config must contain api_key")
+if not roles:
+    raise RuntimeError("Config must contain roles")
+
+# Bot starten
+bot.run(token)
 
 
 # Administrative Befehle
@@ -195,22 +214,3 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
                 await ctx.send(f"Hallo {get_displaynick(author)} du hast die Warteschlange verlassen.")
             else:
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell nicht in der Warteschlange. Du kannst dich mit $wait anstellen")
-
-
-
-# Lade Config
-with open('config.yaml') as f:
-    config = yaml.load(f, Loader=BaseLoader)
-
-token   = config.get('token')
-roles   = config.get('roles')
-prefix  = config.get('prefix')
-
-# Kontrolliere, ob API-Key und Rollen vorhanden 
-if not token:
-    raise RuntimeError("Config must contain api_key")
-if not roles:
-    raise RuntimeError("Config must contain roles")
-
-# Bot starten
-bot.run(token)
