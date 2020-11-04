@@ -86,9 +86,12 @@ async def start(ctx):
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
     if check_permission(ctx, roles.tutor):
+        # Feedback an Tutor
         await ctx.send("Warteschlange ist nun geschlossen.")
-        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
-        # Server wird als inaktiv gelistet
+        # Inaktiven Status wenn auf keinem Server aktiv
+        if not enabled:
+            await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
+        # Server wird als inaktiv gelistet und Mitgleiderliste entfernt
         enabled[ctx.message.guild.id] = False
         member_queues.pop(ctx.message.guild.id)
 
@@ -169,10 +172,10 @@ async def wait(ctx):
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell in Position {member_queues[guild].index(author)+1}. Mit $wait kannst du dir deine aktuelle Position anzeigen lassen")
         else:
             if author in member_queues[guild]:
-                await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell in Position {member_queues[guild].index(author)+1}. Mit $wait kannst du dir deine aktuelle Position anzeigen lassen")
+                pass
             else:
                 member_queues[guild].append(author)
-                await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell in Position {member_queues[guild].index(author)+1}. Mit $wait kannst du dir deine aktuelle Position anzeigen lassen")
+            await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell in Position {member_queues[guild].index(author)+1}. Mit $wait kannst du dir deine aktuelle Position anzeigen lassen")
 
 # Nutzer verlässt die Warteschlange
 @bot.command(pass_context=True)
@@ -195,13 +198,19 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
 
 
 
-with open("config.json") as f:
+# Lade Config
+with open('config.yaml') as f:
     config = yaml.load(f)
 
-api_key = config.get("api_key")
-roles = config.get("roles")
-if not api_key:
+token   = config.get('token')
+roles   = config.get('roles')
+prefix  = config.get('prefix')
+
+# Kontrolliere, ob API-Key und Rollen vorhanden 
+if not token:
     raise RuntimeError("Config must contain api_key")
 if not roles:
     raise RuntimeError("Config must contain roles")
-bot.run(api_key)
+
+# Bot starten
+bot.run(token)
