@@ -25,6 +25,24 @@ import yaml
 from discord.ext import commands
 from collections import deque
 
+# Lade Config
+with open('config.yaml') as f:
+    config = yaml.load(f, Loader=yaml.SafeLoader)
+
+token   = config.get('token')
+prefix  = config.get('prefix')
+roles   = config.get('roles')
+
+# Initialisierung
+bot = commands.Bot(command_prefix=prefix)
+bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
+
+# Kontrolliere, ob API-Key und Rollen vorhanden 
+if not token:
+    raise RuntimeError("Config must contain api_key")
+if not roles:
+    raise RuntimeError("Config must contain roles")
+
 # Speichert Mitglieder der 
 member_queues = {}
 # Speichert ID's der Server und den Aktivitaetszustand
@@ -49,39 +67,20 @@ def get_displaynick(author):
         nick = str(author).split("#")[0]
     return nick
 
-def check_permission(user, roles):
-    '''Kontrolliert, ob Nutzer mindestens einer der Rollen angehört.
+def checkRoles(userMessage, accessRoles):
+    '''Kontrolliert, ob Nutzer mindestens einer der angegebenen Rollen angehört.
 
     Args:
-        user (discord.message):     Nachricht des Nutzers
-        roles (set):                Zu kontrollierende Rollen
+        userMessage (discord.message):  Nachricht des Nutzers
+        accessRoles (list):             Zu kontrollierende Rollen
 
     Returns:
         bool
     '''
-    if {[role.name for role in user.message.author.roles]} & {roles}:
+    if set(role.name for role in userMessage.author.roles) & set(accessRoles):
         return True
     else:
         return False
-
-
-# Lade Config
-with open('config.yaml') as f:
-    config = yaml.load(f, Loader=yaml.SafeLoader)
-
-token   = config.get('token')
-prefix  = config.get('prefix')
-roles   = config.get('roles')
-
-# Initialisierung
-bot = commands.Bot(command_prefix=prefix)
-bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
-
-# Kontrolliere, ob API-Key und Rollen vorhanden 
-if not token:
-    raise RuntimeError("Config must contain api_key")
-if not roles:
-    raise RuntimeError("Config must contain roles")
 
 
 # Administrative Befehle
@@ -89,8 +88,9 @@ if not roles:
 # Startet die Warteschlange auf dem aktuellen Server für alle Nutzer in beliebiegen Kanälen. Aktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Öffnet die Warteschlange")
 async def start(ctx):
+    print(__name__, 'issued')
     # Teste die Rechte
-    if check_permission(ctx, roles['tutor']):
+    if checkRoles(ctx.message, roles['tutor']):
         # Setze Status des Bots auf aktiv
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="ob Studis warten"))
         # Feedback an Tutor
@@ -101,15 +101,18 @@ async def start(ctx):
 # Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
-    if check_permission(ctx, roles['tutor']):
-        # Feedback an Tutor
-        await ctx.send("Warteschlange ist nun geschlossen.")
+    if checkRoles(ctx.message, roles['tutor']):
         # Inaktiven Status wenn auf keinem Server aktiv
         if not enabled:
             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
-        # Server wird als inaktiv gelistet und Mitgleiderliste entfernt
+        # Server wird als inaktiv gelistet
         enabled[ctx.message.guild.id] = False
-        member_queues.pop(ctx.message.guild.id)
+        # Feedback an Tutor
+        try:
+            member_queues.pop(ctx.message.guild.id, default=False)
+            await ctx.send("Warteschlange ist nun geschlossen.")
+        except KeyError:
+            await ctx.send('Die Warteschlange ist noch nicht geöffnet worden.')
 
 # Schiebt den Nächsten aus der Warteschlange in den Raum des Ausführenden. Beide müssen mit dem Voicechat verbunden sein.
 @bot.command(pass_context=True)
@@ -122,7 +125,7 @@ async def next(ctx):
     if guild not in enabled:
         enabled[guild] = False
 
-    if check_permission(ctx, roles['tutor']):
+    if checkRoles(ctx.message, roles['tutor']):
         if not enabled[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
@@ -146,7 +149,7 @@ async def ls(ctx):
     guild = ctx.message.guild.id
     if guild not in enabled:
         enabled[guild] = False
-    if check_permission(ctx, roles['tutor']):
+    if checkRoles(ctx.message, roles['tutor']):
         if not enabled[guild]:
             await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
         else:
