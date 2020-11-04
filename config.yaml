@@ -1,0 +1,6 @@
+api_key: 'TESTKEY'
+
+roles:
+    student:  ['Studierende']
+    tutor:    ['Tutorierende']
+    admin:    ['Administrierende']

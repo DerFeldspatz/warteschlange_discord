@@ -19,34 +19,128 @@
 
 # Discord Queue Bot der während der eLearning Challenge https://elearning.mathphys.info/ entstanden ist.
 
+# Importieren der Packages
 import discord
-import json
+import yaml
 from discord.ext import commands
 from collections import deque
+
+# Speichert Mitglieder der 
 member_queues = {}
+# Speichert ID's der Server und den Aktivitaetszustand
 enabled = {}
 
+def get_displaynick(author):
+    '''Funktion gibt Anzeigenamen auf dem aktuellen Server zurueck.
 
+    Args:
+        author (discord.abc.User):  Mitglied eines Servers
 
+    Returns:
+        str:                        Anzeigenamen des Benutzers
+    '''
+    nick = ""
+    # Erhalte Nicknamen, wenn vorhanden
+    if author.nick:
+        nick = author.nick
+    # Ansonsten erhalte Discord-Benutzernamen 
+    else:
+        nick = str(author).split("#")[0]
+    return nick
+
+def check_permission(user, roles):
+    '''Kontrolliert, ob Nutzer mindestens einer der Rollen angehört.
+
+    Args:
+        user (discord.message):     Nachricht des Nutzers
+        roles (set):                Zu kontrollierende Rollen
+
+    Returns:
+        bool
+    '''
+    if {[role.name for role in user.message]} & {roles}:
+        return True
+    else:
+        return False
+
+# Initialisierung
 bot = commands.Bot(command_prefix="$")
 bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
 
 
+# Administrative Befehle
+
+# Startet die Warteschlange auf dem aktuellen Server für alle Nutzer in beliebiegen Kanälen. Aktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Öffnet die Warteschlange")
 async def start(ctx):
-    if set([role.name for role in ctx.message.author.roles]) & set(roles):
+    # Teste die Rechte
+    if check_permission(ctx, roles.tutor):
+        # Setze Status des Bots auf aktiv
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="ob Studis warten"))
+        # Feedback an Tutor
         await ctx.send("Warteschlange ist nun geöffnet.")
+        # Server wird als aktiv gelistet
         enabled[ctx.message.guild.id] = True
 
+# Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
-    if set([role.name for role in ctx.message.author.roles]) & set(roles):
+    if check_permission(ctx, roles.tutor):
         await ctx.send("Warteschlange ist nun geschlossen.")
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
+        # Server wird als inaktiv gelistet
         enabled[ctx.message.guild.id] = False
         member_queues.pop(ctx.message.guild.id)
 
+# Schiebt den Nächsten aus der Warteschlange in den Raum des Ausführenden. Beide müssen mit dem Voicechat verbunden sein.
+@bot.command(pass_context=True)
+async def next(ctx):
+    guild = ctx.message.guild.id
+    author = ctx.message.author
+    voice_state = author.voice
+    vc = voice_state.channel
+
+    if guild not in enabled:
+        enabled[guild] = False
+
+    if check_permission(ctx, roles.tutor):
+        if not enabled[guild]:
+            await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
+        else:
+            if len(member_queues[guild]) >= 1:
+                member = member_queues[guild].popleft()
+            else:
+                await ctx.send("Die Warteschlange ist leer :(")
+            try:
+                next_member = member_queues[guild].popleft()
+                member_queues[guild].appendleft(next_member)
+                await ctx.send(f"{get_displaynick(member)} ist dran. Der nächste ist {next_member.mention}")
+                await member.move_to(vc)
+            except IndexError:
+                await member.move_to(vc)
+                await ctx.send(f"{get_displaynick(member)} ist dran. Der nächste ist Niemand :(")
+
+# Gibt eine Liste der Mitglieder der Warteschlange auf dem aktuellen Server aus
+@bot.command(pass_context=True)
+async def ls(ctx):
+    author = ctx.message.author
+    guild = ctx.message.guild.id
+    if guild not in enabled:
+        enabled[guild] = False
+    if check_permission(ctx, roles.tutor):
+        if not enabled[guild]:
+            await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
+        else:
+            if member_queues[guild]:
+                for number, member in enumerate(member_queues[guild]):
+                    await ctx.send(f"{number+1}. {get_displaynick(member)}")
+            else:
+                await ctx.send(f"Es ist im Moment niemand in der Warteschlange!")
+
+
+# Nutzerbefehle
+
+# Gibt den aktuellen Status der Warteschlange auf dem Server an.
 @bot.command(pass_context=True, help="Aktueller Status der Warteschlange")
 async def status(ctx):
     # todo this can fail
@@ -58,16 +152,7 @@ async def status(ctx):
     else:
         enabled[ctx.message.guild.id] = False
 
-
-def get_displaynick(author):
-    nick = ""
-    if author.nick:
-        nick = author.nick
-    else:
-        nick = str(author).split("#")[0]
-    return nick
-
-
+# Nutzer trägt sich in die Warteschlange ein. 
 @bot.command(pass_context=True, help="Anstellen in Warteschlange")
 async def wait(ctx):
     author = ctx.message.author
@@ -89,7 +174,7 @@ async def wait(ctx):
                 member_queues[guild].append(author)
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell in Position {member_queues[guild].index(author)+1}. Mit $wait kannst du dir deine aktuelle Position anzeigen lassen")
 
-
+# Nutzer verlässt die Warteschlange
 @bot.command(pass_context=True)
 async def leave(ctx, help="Verlassen der Warteschlange"):
     author = ctx.message.author
@@ -109,52 +194,9 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell nicht in der Warteschlange. Du kannst dich mit $wait anstellen")
 
 
-@bot.command(pass_context=True)
-async def next(ctx):
-    guild = ctx.message.guild.id
-    author = ctx.message.author
-    voice_state = author.voice
-    vc = voice_state.channel
-
-    if guild not in enabled:
-        enabled[guild] = False
-
-    if set([role.name for role in ctx.message.author.roles]) & set(roles):
-        if not enabled[guild]:
-            await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
-        else:
-            if len(member_queues[guild]) >= 1:
-                member = member_queues[guild].popleft()
-            else:
-                await ctx.send("Die Warteschlange ist leer :(")
-            try:
-                next_member = member_queues[guild].popleft()
-                member_queues[guild].appendleft(next_member)
-                await ctx.send(f"{get_displaynick(member)} ist dran. Der nächste ist {next_member.mention}")
-                await member.move_to(vc)
-            except IndexError:
-                await member.move_to(vc)
-                await ctx.send(f"{get_displaynick(member)} ist dran. Der nächste ist Niemand :(")
-
-@bot.command(pass_context=True)
-async def ls(ctx):
-    author = ctx.message.author
-    guild = ctx.message.guild.id
-    if guild not in enabled:
-        enabled[guild] = False
-    if set([role.name for role in ctx.message.author.roles]) & set(roles):
-        if not enabled[guild]:
-            await ctx.send(f"Hallo {get_displaynick(author)}. Die Warteschlange ist aktuell noch geschlossen. Du kannst sie mit $start öffnen.")
-        else:
-            if member_queues[guild]:
-                for number, member in enumerate(member_queues[guild]):
-                    await ctx.send(f"{number+1}. {get_displaynick(member)}")
-            else:
-                await ctx.send(f"Es ist im Moment niemand in der Warteschlange!")
-
 
 with open("config.json") as f:
-    config = json.load(f)
+    config = yaml.load(f)
 
 api_key = config.get("api_key")
 roles = config.get("roles")
