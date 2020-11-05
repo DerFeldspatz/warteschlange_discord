@@ -123,6 +123,7 @@ async def start(ctx):
 # Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
+    # Teste die Zugriffsrechte
     if checkRoles(ctx.message, roles['tutor']):
         # Server wird intern als inaktiv gelistet
         enabledGuilds[ctx.message.guild.id] = False
