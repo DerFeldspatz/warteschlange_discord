@@ -35,7 +35,6 @@ roles   = config.get('roles')
 
 # Initialisierung
 bot = commands.Bot(command_prefix=prefix)
-bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
 
 # Kontrolliere, ob API-Key und Rollen vorhanden 
 if not token:
@@ -58,14 +57,12 @@ async def updateGuilds(queueEnabled=False):
         queueEnabled (bool):    Warteschlange ist auf den neuen Servern aktiv (optional)
     
     Returns:
-        pass
+        empty
     '''
     allGuilds = {}
     async for guild in bot.fetch_guilds(limit=100):
-        await print(guild.name, guild.id)
         allGuilds[guild.id] = queueEnabled
     enabledGuilds.update(allGuilds)
-    pass
 
 def get_displaynick(author):
     '''Funktion gibt Anzeigenamen auf dem aktuellen Server zurueck.
@@ -100,6 +97,11 @@ def checkRoles(userMessage, accessRoles):
     else:
         return False
 
+async def botStartup():
+    # Aktualisiere Liste mit aktivierten Servern
+    await updateGuilds()
+    # Bot-Aktivitaet auf passiv
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="mit anderen Bots"))
 
 
 # Administrative Befehle
@@ -107,24 +109,22 @@ def checkRoles(userMessage, accessRoles):
 # Startet die Warteschlange auf dem aktuellen Server für alle Nutzer in beliebiegen Kanälen. Aktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Öffnet die Warteschlange")
 async def start(ctx):
-    # Teste die Rechte
+    # Teste die Zugriffsrechte
     if checkRoles(ctx.message, roles['tutor']):
-        # Aktualisiere Liste mit aktivierten Servern
-        updateGuilds()
         # Setze Status des Bots auf aktiv
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="ob Studis warten"))
         # Feedback an Tutor
         await ctx.send("Warteschlange ist nun geöffnet.")
         # Server wird als aktiv gelistet
         enabledGuilds[ctx.message.guild.id] = True
+    else:
+        pass
 
 # Schließt die Warteschlange auf dem aktuellen Server. Deaktiviert Nutzerbefehle.
 @bot.command(pass_context=True, help="Schließt die Warteschlange")
 async def stop(ctx):
     if checkRoles(ctx.message, roles['tutor']):
-        # Aktualisiere Liste mit aktivierten Servern
-        updateGuilds()
-        # Server wird als inaktiv gelistet
+        # Server wird intern als inaktiv gelistet
         enabledGuilds[ctx.message.guild.id] = False
         # Feedback an Tutor
         try:
@@ -236,6 +236,15 @@ async def leave(ctx, help="Verlassen der Warteschlange"):
                 await ctx.send(f"Hallo {get_displaynick(author)} du hast die Warteschlange verlassen.")
             else:
                 await ctx.send(f"Hallo {get_displaynick(author)} du bist aktuell nicht in der Warteschlange. Du kannst dich mit $wait anstellen")
+
+
+# Automatisierte Routinen
+
+# Beim Start wird die Liste der aktiven Gilden erzeugt, sowie der Status gesetzt
+@bot.event
+async def on_ready():
+    await botStartup()
+    print(f'Bot ist einsatzbereit')
 
 # Bot starten
 bot.run(token)
