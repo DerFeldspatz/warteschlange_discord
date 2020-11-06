@@ -140,6 +140,7 @@ async def stop(ctx):
 # Schiebt den Nächsten aus der Warteschlange in den Raum des Ausführenden. Beide müssen mit dem Voicechat verbunden sein.
 @bot.command(pass_context=True)
 async def next(ctx):
+    # todo: check if users are in voice
     guild = ctx.message.guild.id
     author = ctx.message.author
     voice_state = author.voice
